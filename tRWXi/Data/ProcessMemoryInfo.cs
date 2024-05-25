@@ -22,7 +22,5 @@ namespace tRWXi.Data
             this.baseAddress = baseAddress;
             this.size = size;
         }
-
-
     }
 }

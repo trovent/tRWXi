@@ -6,7 +6,8 @@ namespace tRWXix.Utils
     {
         internal static void help()
         {
-            Console.WriteLine("Usage:\n\t.\\tRWXi.exe /trigger /pid=<pid> /address=<hex address /w code> ;");
+            Console.WriteLine("Usage:\n\t.\\tRWXix.exe /enumerate ;" +
+                              "\t.\\tRWXix.exe /trigger /pid=<pid> /address=<hex address> /data=<comma-separated hex> ;");
         }
     }
 }
