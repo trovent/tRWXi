@@ -6,6 +6,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{165F50DB-EDB0-49AD-8836-6B76EDED02C0}</ProjectGuid>
     <OutputType>Exe</OutputType>
+    <PublishSingleFile>true</PublishSingleFile>
     <RootNamespace>tRWXix</RootNamespace>
     <AssemblyName>tRWXix</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>

