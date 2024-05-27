@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace tRWXi.Utils
+namespace tRWXix.Utils
 {
     internal class Shellcoder
     {
