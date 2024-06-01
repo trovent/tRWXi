@@ -155,7 +155,6 @@ namespace tRWXi
                             Console.WriteLine("[!] Started injection");
                             WriteProcessMemory(hProcess, addr, data, data.Length, out numberOfBytesWritten);
                             Console.WriteLine(String.Format("[+] {0} bytes written into RWX region", numberOfBytesWritten));
-                            Console.WriteLine("[!] Starting execution...");
                         }
                         else {}
 
@@ -197,8 +196,7 @@ namespace tRWXi
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
-                Utils.Helper.help();
+                Console.WriteLine(String.Format("[-] {0}", ex.Message));
                 Environment.Exit(1);
             }
         }
