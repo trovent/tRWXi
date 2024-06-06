@@ -32,7 +32,8 @@ tRWXi functionality w/ NtApiDotNet library
 
 ### Description
 Same functionality as of **tRWXi**.\
-Pure **NtApiDotNet** implementation for less visibility.
+Pure [**NtApiDotNet**](https://github.com/googleprojectzero/sandbox-attacksurface-analysis-tools/tree/main/NtApiDotNet) implementation for less visibility.\
+For PS scripting: use [**NtObjectManager**](https://www.powershellgallery.com/packages/NtObjectManager/2.0.1) module, which utilizes NtApiDotNet to expose NT object manager.
 
 ### Usage
 ```
