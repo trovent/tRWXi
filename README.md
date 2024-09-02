@@ -52,3 +52,14 @@ Usage:
 ![RWX enumeration](./_readme.d/02-injector-2.png)
 - Trigger the memory region w/ a shellcode inside it
 ![RWX enumeration](./_readme.d/02-injector-3.png)
+
+# tRWXiu
+
+### Description
+Implementated using Nt direct syscalls for less visibility.
+
+### Usage:
+```
+Usage:
+        .\tRWXiu.exe /pid=<pid> /address=<address> /data=<data> [/verbose]
+```
